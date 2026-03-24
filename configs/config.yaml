@@ -1,0 +1,10 @@
+# pipeline参数配置示例
+pipeline:
+  - name: color
+    params: {}
+  - name: shadow
+    params: {}
+  - name: highlight
+    params: {}
+  - name: detail
+    params: {}
