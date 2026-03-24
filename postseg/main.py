@@ -1,5 +1,6 @@
 import cv2
 from postseg.pipeline.base_pipeline import ImageProcessingPipeline
+from postseg.modules.smooth import SmoothStep
 from postseg.modules.color_analysis import ColorAnalysisStep
 from postseg.modules.shadow_analysis import ShadowAnalysisStep
 from postseg.modules.highlight_analysis import HighlightAnalysisStep
@@ -9,6 +10,7 @@ from postseg.gui_utils import select_image_file
 import sys
 
 STEP_MAP = {
+    'smooth': SmoothStep,
     'color': ColorAnalysisStep,
     'shadow': ShadowAnalysisStep,
     'highlight': HighlightAnalysisStep,

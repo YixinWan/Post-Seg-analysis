@@ -1,9 +1,11 @@
 # Post-Seg-analysis 图像处理工程
 
 ## 项目简介
+
 本项目为可插拔式图像处理pipeline，支持如下流程：
 - 输入图片
-- 铺色分析和处理
+- 平滑处理（先对输入图片做高斯模糊，减少噪点，便于后续色块提取）
+- 铺色分析和处理（提取整图主色调/中值色，并用主色调覆盖原图，输出到outputs/median_color.jpg）
 - 暗部分析和处理
 - 亮部分析和处理
 - 细节分析
@@ -47,6 +49,7 @@ environment.yml          # conda环境配置
 
 ## 使用方法
 
+
 ### 命令行直接指定图片：
 ```sh
 python -m postseg.main <input_image> <output_image> <config_path>
@@ -61,6 +64,7 @@ python -m postseg.main --gui ./outputs/output.jpg ./configs/config.yaml
 ```
 
 > 建议将输出图片保存在 `outputs/` 目录下，便于管理。
+> 铺色分析（主色调/中值色）结果会自动输出到 `outputs/median_color.jpg`。
 
 ## 配置与扩展
 - `configs/config.yaml` 控制pipeline流程和各模块参数。

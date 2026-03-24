@@ -1,7 +1,11 @@
 # pipeline参数配置示例
 pipeline:
+  - name: smooth
+    params:
+      ksize: 5
   - name: color
-    params: {}
+    params:
+      output_path: outputs/median_color.jpg
   - name: shadow
     params: {}
   - name: highlight
