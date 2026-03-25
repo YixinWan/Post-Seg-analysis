@@ -7,4 +7,9 @@ class SmoothStep(PipelineStep):
         ksize = self.params.get('ksize', 5)
         if ksize % 2 == 0:
             ksize += 1  # 高斯核必须为奇数
-        return cv2.GaussianBlur(image, (ksize, ksize), 0)
+        smoothed = cv2.GaussianBlur(image, (ksize, ksize), 0)
+        # 保存平滑处理后的图片
+        output_path = self.params.get('output_path', 'outputs/smoothed.jpg')
+        if output_path:
+            cv2.imwrite(output_path, smoothed)
+        return smoothed

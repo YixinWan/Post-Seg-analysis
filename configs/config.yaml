@@ -2,7 +2,8 @@
 pipeline:
   - name: smooth
     params:
-      ksize: 5
+      ksize: 25
+      output_path: outputs/smoothed.jpg
   - name: color
     params:
       output_path: outputs/median_color.jpg
