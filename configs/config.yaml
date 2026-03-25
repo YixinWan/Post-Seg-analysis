@@ -2,14 +2,21 @@
 pipeline:
   - name: smooth
     params:
-      ksize: 25
+      ksize: 15
       output_path: outputs/smoothed.jpg
   - name: color
     params:
-      output_path: outputs/median_color.jpg
+      output_path: outputs/mode_color.jpg
+      min_cluster_pixels: 50
+      peak_min_ratio: 0.35
+      hist_smooth_kernel: 9
   - name: shadow
     params: {}
   - name: highlight
     params: {}
   - name: detail
     params: {}
+
+# 说明：
+# - 每次处理新图片前，会先清空 `outputs/` 中旧的输出文件。
+# - 常规情况下只需要关注各 step 自己的 `output_path`，例如 `outputs/mode_color.jpg`。
