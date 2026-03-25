@@ -8,15 +8,22 @@ from postseg.pipeline.base_pipeline import PipelineStep
 
 
 class ColorAnalysisStep(PipelineStep):
+    def _get_mode_source_image(self, image):
+        source_image = self.params.get('source_image')
+        if source_image is None or source_image.shape != image.shape:
+            return image
+        return source_image
+
     def _compute_non_black_mask(self, image):
         black_thresh = self.params.get('black_thresh', 10)
         channels = image[:, :, :3] if image.shape[2] > 3 else image
         return np.any(channels > black_thresh, axis=2)
 
     def _compute_mode_color(self, image, mask):
-        if not np.any(mask):
+        valid_mask = mask & self._compute_non_black_mask(image)
+        if not np.any(valid_mask):
             return [0] * image.shape[2]
-        pixels = [tuple(px) for px in image[mask]]
+        pixels = [tuple(px) for px in image[valid_mask]]
         return list(Counter(pixels).most_common(1)[0][0])
 
     def _circular_distance(self, hues, center):
@@ -150,17 +157,17 @@ class ColorAnalysisStep(PipelineStep):
         stem = base_path.stem
         return str(base_path.with_name(f"{stem}_hue_{region_index + 1}{suffix}"))
 
-    def _save_region_outputs(self, image, regions, base_output_path):
+    def _save_region_outputs(self, segmentation_image, mode_source_image, regions, base_output_path):
         saved_paths = []
         if len(regions) <= 1:
             for region in regions:
-                region['mode_color'] = self._compute_mode_color(image, region['mask'])
+                region['mode_color'] = self._compute_mode_color(mode_source_image, region['mask'])
                 region['output_path'] = None
             return saved_paths
 
         for region in regions:
-            mode_color = self._compute_mode_color(image, region['mask'])
-            separated = np.zeros_like(image)
+            mode_color = self._compute_mode_color(mode_source_image, region['mask'])
+            separated = np.zeros_like(segmentation_image)
             separated[region['mask']] = mode_color
             region['mode_color'] = mode_color
             region_output_path = self._build_region_output_path(base_output_path, region['index'])
@@ -172,6 +179,7 @@ class ColorAnalysisStep(PipelineStep):
         return saved_paths
 
     def process(self, image):
+        mode_source_image = self._get_mode_source_image(image)
         non_black_mask = self._compute_non_black_mask(image)
         if not np.any(non_black_mask):
             out_img = np.zeros_like(image)
@@ -185,9 +193,9 @@ class ColorAnalysisStep(PipelineStep):
 
         regions = self._extract_hue_regions(image, non_black_mask)
         output_path = self.params.get('output_path')
-        saved_paths = self._save_region_outputs(image, regions, output_path)
+        saved_paths = self._save_region_outputs(image, mode_source_image, regions, output_path)
 
-        out_img = np.zeros_like(image)
+        out_img = np.zeros_like(mode_source_image)
         for region in regions:
             out_img[region['mask']] = region['mode_color']
 

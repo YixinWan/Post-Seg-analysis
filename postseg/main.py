@@ -58,7 +58,10 @@ def main(input_path, output_path, config_path):
     for step_cfg in config['pipeline']:
         step_cls = STEP_MAP.get(step_cfg['name'])
         if step_cls:
-            steps.append(step_cls(step_cfg['name'], step_cfg.get('params', {})))
+            step_params = dict(step_cfg.get('params', {}))
+            if step_cfg['name'] == 'color':
+                step_params['source_image'] = image.copy()
+            steps.append(step_cls(step_cfg['name'], step_params))
     pipeline = ImageProcessingPipeline(steps)
     result = pipeline.run(image)
     if output_path:
