@@ -11,7 +11,19 @@ pipeline:
       peak_min_ratio: 0.35
       hist_smooth_kernel: 9
   - name: shadow
-    params: {}
+    params:
+      analysis_image_path: outputs/smoothed.jpg
+      color_output_path: outputs/mode_color.jpg
+      output_path: outputs/mode_color_shadow.jpg
+      shadow_percentile: 0.5
+      morphology:
+        enabled: false
+        open_kernel: 5
+        close_kernel: 17
+        dilate_kernel: 3
+        dilate_iterations: 3
+        erode_kernel: 5
+        erode_iterations: 3
   - name: highlight
     params: {}
   - name: detail

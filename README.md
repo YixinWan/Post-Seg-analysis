@@ -114,16 +114,18 @@ python -m postseg.main --gui ./configs/config.yaml
   - `sigma_scale`：根据拟合峰宽扩张区域边界的倍率。
   - `dominant_merge_distance`：两个主色相中心过近时的合并阈值。
   - `hist_smooth_kernel`：色相直方图平滑窗口大小，越大越倾向于忽略细碎小波动。
+- `shadow` 模块支持以下关键参数：
+  - `color_output_path`：铺色输出总图路径，用于自动定位 `mode_color` 掩码和可选的 `*_hue_N` 分区图。
+  - `output_path`：暗部总输出图路径；若存在多张色相分区图，还会额外输出对应的 `*_shadow.*` 分图。
+  - `shadow_percentile`：直接按 LAB 的 L 分位数提取暗部，默认 `0.3`，表示取该区域中最暗的 30% 像素。
+  - `morphology`：暗部结果的形态学后处理配置，作用在 `mode_color_shadow` 的二值 mask 上，再回填 mode 颜色。
+    - `enabled`：是否启用形态学后处理。
+    - `open_kernel`：开运算核大小，用于优先去掉孤立小噪点。
+    - `close_kernel`：闭运算核大小，用于连接近邻暗部空隙。
+    - `dilate_kernel` / `dilate_iterations`：膨胀参数，用于扩展连通区域。
+    - `erode_kernel` / `erode_iterations`：腐蚀参数，用于回收边缘、去掉过度膨胀。
 - 新增模块：在`modules/`下添加新模块，继承`PipelineStep`，并在`main.py`的`STEP_MAP`注册。
 - 可按需调整pipeline顺序和参数。
-
-## 测试
-本项目已包含基础测试用例，需准备一张测试图片（如 `tests/testdata/test.jpg`）。
-
-运行测试：
-```sh
-pytest tests/
-```
 
 ---
 如需进一步定制或扩展，请参考源码注释。
