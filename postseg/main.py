@@ -72,6 +72,17 @@ def main(input_path, output_path, config_path):
                         if not smooth_output.is_absolute():
                             smooth_output = (config_dir.parent / smooth_output).resolve()
                         step_params['analysis_image_path'] = str(smooth_output)
+            if step_cfg['name'] == 'highlight':
+                step_params['source_image'] = image.copy()
+                smooth_step_cfg = next((cfg for cfg in config['pipeline'] if cfg.get('name') == 'smooth'), None)
+                if smooth_step_cfg:
+                    smooth_output_path = smooth_step_cfg.get('params', {}).get('output_path')
+                    if smooth_output_path:
+                        config_dir = Path(config_path).resolve().parent
+                        smooth_output = Path(smooth_output_path)
+                        if not smooth_output.is_absolute():
+                            smooth_output = (config_dir.parent / smooth_output).resolve()
+                        step_params['analysis_image_path'] = str(smooth_output)
             steps.append(step_cls(step_cfg['name'], step_params))
     pipeline = ImageProcessingPipeline(steps)
     result = pipeline.run(image)
