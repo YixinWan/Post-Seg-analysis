@@ -116,7 +116,8 @@ python -m postseg.main --gui ./configs/config.yaml
   - `hist_smooth_kernel`：色相直方图平滑窗口大小，越大越倾向于忽略细碎小波动。
 - `shadow` 模块支持以下关键参数：
   - `color_output_path`：铺色输出总图路径，用于自动定位 `mode_color` 掩码和可选的 `*_hue_N` 分区图。
-  - `output_path`：暗部总输出图路径；若存在多张色相分区图，还会额外输出对应的 `*_shadow.*` 分图。
+  - `output_path`：暗部总输出图路径，使用原图对应暗部区域的 `mode` 颜色填充；若存在多张色相分区图，还会额外输出对应的 `*_shadow.*` 分图。
+  - `source_color_output_path`：暗部原色输出图路径，使用与 `mode_color_shadow` 相同的暗部掩码，但直接保留原图对应位置的原色。
   - `shadow_percentile`：直接按 LAB 的 L 分位数提取暗部，默认 `0.3`，表示取该区域中最暗的 30% 像素。
   - `morphology`：暗部结果的形态学后处理配置，作用在 `mode_color_shadow` 的二值 mask 上，再回填 mode 颜色。
     - `enabled`：是否启用形态学后处理。

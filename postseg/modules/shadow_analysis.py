@@ -59,6 +59,14 @@ class ShadowAnalysisStep(PipelineStep):
         suffix = color_output_path.suffix or '.png'
         return color_output_path.with_name(f"{color_output_path.stem}_shadow{suffix}")
 
+    def _resolve_source_color_output_path(self):
+        source_color_output_path = self.params.get('source_color_output_path')
+        if source_color_output_path:
+            return Path(source_color_output_path)
+        base_output_path = self._resolve_base_output_path()
+        suffix = base_output_path.suffix or '.png'
+        return base_output_path.with_name(f"{base_output_path.stem}_source{suffix}")
+
     def _discover_mask_paths(self, color_output_path):
         candidate_paths = []
         if color_output_path.exists():
@@ -140,25 +148,34 @@ class ShadowAnalysisStep(PipelineStep):
         region_path = Path(region_path)
         return str(region_path.with_name(f"{region_path.stem}_shadow{region_path.suffix or base_output_path.suffix or '.png'}"))
 
+    def _build_region_source_shadow_output_path(self, region_path, source_color_output_path, multiple_regions):
+        if not multiple_regions:
+            return str(source_color_output_path)
+        region_path = Path(region_path)
+        suffix = region_path.suffix or source_color_output_path.suffix or '.png'
+        return str(region_path.with_name(f"{region_path.stem}_shadow_source{suffix}"))
+
     def _analyze_single_region(self, mask_image, working_image, source_image):
         region_mask = self._compute_non_black_mask(mask_image)
         if not np.any(region_mask):
-            return np.zeros_like(source_image), None
+            return np.zeros_like(source_image), np.zeros_like(source_image), None
 
         lab = cv2.cvtColor(working_image[:, :, :3], cv2.COLOR_BGR2LAB)
         l_channel = lab[:, :, 0]
         l_values = l_channel[region_mask].astype(np.float32)
         if l_values.size == 0:
-            return np.zeros_like(source_image), None
+            return np.zeros_like(source_image), np.zeros_like(source_image), None
 
         shadow_mask, cutoff, shadow_ratio = self._build_shadow_mask(region_mask, l_channel)
         shadow_mask, morphology_ops = self._apply_shadow_morphology(shadow_mask)
         shadow_ratio = float(shadow_mask.sum()) / float(max(1, int(region_mask.sum())))
 
-        result = np.zeros_like(source_image)
+        mode_result = np.zeros_like(source_image)
+        source_result = np.zeros_like(source_image)
         if np.any(shadow_mask):
             mode_color = self._compute_mode_color(source_image, shadow_mask)
-            result[shadow_mask] = mode_color
+            mode_result[shadow_mask] = mode_color
+            source_result[shadow_mask] = source_image[shadow_mask]
         else:
             mode_color = [0, 0, 0]
 
@@ -172,26 +189,32 @@ class ShadowAnalysisStep(PipelineStep):
             'morphology_operations': morphology_ops,
             'mode_color': mode_color,
         }
-        return result, stats
+        return mode_result, source_result, stats
 
     def process(self, image):
         source_image = self._resolve_input_image(image)
         working_image = self._resolve_analysis_image(image)
         color_output_path = self._resolve_color_output_path()
         base_output_path = self._resolve_base_output_path()
+        source_color_output_path = self._resolve_source_color_output_path()
         base_output_path.parent.mkdir(parents=True, exist_ok=True)
+        source_color_output_path.parent.mkdir(parents=True, exist_ok=True)
 
         region_paths = self._discover_mask_paths(color_output_path)
         if not region_paths:
             empty = np.zeros_like(source_image)
             cv2.imwrite(str(base_output_path), empty)
+            cv2.imwrite(str(source_color_output_path), empty)
             self.params['last_shadow_region_paths'] = []
+            self.params['last_shadow_source_region_paths'] = []
             self.params['last_shadow_regions'] = []
             return working_image
 
         multiple_regions = len(region_paths) > 1
         combined_shadow = np.zeros_like(source_image)
+        combined_source_shadow = np.zeros_like(source_image)
         saved_paths = []
+        saved_source_paths = []
         shadow_regions = []
 
         for idx, region_path in enumerate(region_paths):
@@ -199,18 +222,25 @@ class ShadowAnalysisStep(PipelineStep):
             if mask_image is None or mask_image.shape != working_image.shape:
                 continue
 
-            shadow_image, stats = self._analyze_single_region(mask_image, working_image, source_image)
+            shadow_image, source_shadow_image, stats = self._analyze_single_region(mask_image, working_image, source_image)
             region_output_path = self._build_region_shadow_output_path(region_path, base_output_path, multiple_regions)
+            region_source_output_path = self._build_region_source_shadow_output_path(region_path, source_color_output_path, multiple_regions)
             cv2.imwrite(region_output_path, shadow_image)
+            cv2.imwrite(region_source_output_path, source_shadow_image)
             saved_paths.append(region_output_path)
+            saved_source_paths.append(region_source_output_path)
             shadow_pixels = np.any(shadow_image > 0, axis=2)
             if np.any(shadow_pixels):
                 combined_shadow[shadow_pixels] = shadow_image[shadow_pixels]
+            source_shadow_pixels = np.any(source_shadow_image > 0, axis=2)
+            if np.any(source_shadow_pixels):
+                combined_source_shadow[source_shadow_pixels] = source_shadow_image[source_shadow_pixels]
 
             shadow_regions.append({
                 'index': idx,
                 'mask_path': str(region_path),
                 'output_path': region_output_path,
+                'source_output_path': region_source_output_path,
                 **(stats or {
                     'region_pixels': 0,
                     'shadow_pixels': 0,
@@ -223,9 +253,12 @@ class ShadowAnalysisStep(PipelineStep):
 
         if multiple_regions:
             cv2.imwrite(str(base_output_path), combined_shadow)
+            cv2.imwrite(str(source_color_output_path), combined_source_shadow)
         elif saved_paths:
             cv2.imwrite(str(base_output_path), combined_shadow)
+            cv2.imwrite(str(source_color_output_path), combined_source_shadow)
 
         self.params['last_shadow_region_paths'] = saved_paths
+        self.params['last_shadow_source_region_paths'] = saved_source_paths
         self.params['last_shadow_regions'] = shadow_regions
         return working_image

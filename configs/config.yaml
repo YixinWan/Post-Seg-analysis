@@ -15,9 +15,10 @@ pipeline:
       analysis_image_path: outputs/smoothed.jpg
       color_output_path: outputs/mode_color.jpg
       output_path: outputs/mode_color_shadow.jpg
-      shadow_percentile: 0.5
+      source_color_output_path: outputs/mode_color_shadow_source.jpg
+      shadow_percentile: 0.3
       morphology:
-        enabled: false
+        enabled: true
         open_kernel: 5
         close_kernel: 17
         dilate_kernel: 3
