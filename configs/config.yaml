@@ -7,6 +7,8 @@ pipeline:
   - name: color
     params:
       output_path: outputs/mode_color.jpg
+      fill_mode: median_l # 可选: mode_color | median_l
+      median_l_band_percentile: 0.3 # 仅 fill_mode=median_l 时生效，表示取 L 分布中间亮度带宽比例
       min_cluster_pixels: 50
       peak_min_ratio: 0.35
       hist_smooth_kernel: 9
@@ -17,11 +19,11 @@ pipeline:
       output_path: outputs/mode_color_shadow.jpg
       source_color_output_path: outputs/mode_color_shadow_source.jpg
       source_gray_overlay_output_path: outputs/mode_color_shadow_source_gray_overlay.jpg
-      shadow_percentile: 0.4
+      shadow_percentile: 0.45
       morphology:
         enabled: true
         open_kernel: 5
-        close_kernel: 17
+        close_kernel: 5
         dilate_kernel: 3
         dilate_iterations: 3
         erode_kernel: 5
@@ -33,11 +35,11 @@ pipeline:
       output_path: outputs/mode_color_highlight.jpg
       source_color_output_path: outputs/mode_color_highlight_source.jpg
       source_gray_overlay_output_path: outputs/mode_color_highlight_source_gray_overlay.jpg
-      highlight_percentile: 0.45
+      highlight_percentile: 0.4
       morphology:
         enabled: true
         open_kernel: 5
-        close_kernel: 17
+        close_kernel: 5
         dilate_kernel: 3
         dilate_iterations: 3
         erode_kernel: 5

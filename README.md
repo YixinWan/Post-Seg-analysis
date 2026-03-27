@@ -5,7 +5,7 @@
 本项目为可插拔式图像处理pipeline，支持如下流程：
 - 输入图片
 - 平滑处理（先对输入图片做高斯模糊，减少噪点，便于后续色块提取）
-- 铺色分析和处理（基于平滑后的输入图像做 HSV 色相分布分析，排除黑色区域；若检测到多个主要色相，则先自动分离不同色相区域，再分别做 mode_color 覆色）
+- 铺色分析和处理（基于平滑后的输入图像做 HSV 色相分布分析，排除黑色区域；若检测到多个主要色相，则先自动分离不同色相区域，再分别做铺色；支持 `mode_color` 与基于 LAB 的 `median_l` 铺色模式）
 - 暗部分析和处理
 - 亮部分析和处理
 - 细节分析
@@ -22,7 +22,7 @@ postseg/
   pipeline/
     base_pipeline.py     # pipeline基类与流程控制
   modules/
-    color_analysis.py    # 铺色分析模块（含主色相分区 + mode_color 覆色导出）
+  color_analysis.py    # 铺色分析模块（含主色相分区 + 可配置铺色模式导出）
     shadow_analysis.py   # 暗部分析模块
     highlight_analysis.py# 亮部分析模块
     detail_analysis.py   # 细节分析模块
@@ -83,9 +83,11 @@ python -m postseg.main --gui ./configs/config.yaml
 2. 对 $H$ 的分布密度做平滑，寻找主要峰值，并将每个峰近似看作一个正态分布中心。
 3. 根据峰宽（标准差）和峰间距离，自动合并过近峰值、过滤过小峰值，得到主要色相。
 4. 分区边界始终基于**平滑后的图像**计算，以减少噪声干扰。
-5. 但每个分区内部的 `mode_color` 统计，使用的是**平滑前的原图**对应区域，以保留原始颜色信息。
-6. 若只有一个主要色相，则直接对整块非黑区域执行 `mode_color`。
-7. 若存在多个主要色相，则按最近主色相中心自动划分边界，先拆成多个色相区域，再分别执行 `mode_color`。
+5. 每个分区内部的铺色值使用的是**平滑前的原图**对应区域：
+  - `fill_mode=mode_color`：区域原图颜色众数（原逻辑）。
+  - `fill_mode=median_l`：先在区域内按 LAB 的 $L$ 选择“中间亮度带”像素，再用这批像素的原色众数铺色（不是中性灰）。
+6. 若只有一个主要色相，则直接对整块非黑区域执行所选 `fill_mode`。
+7. 若存在多个主要色相，则按最近主色相中心自动划分边界，先拆成多个色相区域，再分别执行所选铺色模式。
 
 这样可以更稳定地区分颜色接近但色相不同的铺色区域，避免整图只被单一众数色覆盖。
 
@@ -108,6 +110,8 @@ python -m postseg.main --gui ./configs/config.yaml
 ## 配置与扩展
 - `configs/config.yaml` 控制pipeline流程和各模块参数。
 - `color` 模块支持以下关键参数：
+  - `fill_mode`：铺色模式，默认 `mode_color`；可选 `median_l`（按掩码区域原图 LAB 的 $L$ 中间亮度带提取原色众数铺色）。
+  - `median_l_band_percentile`：仅 `fill_mode=median_l` 时生效，默认 `0.2`，表示在区域内取 $L$ 分布中间 20% 的像素参与颜色统计。
   - `black_thresh`：黑色区域阈值，低于该阈值的像素不参与色相分析。
   - `min_cluster_pixels`：允许成为主色相区域的最小像素数。
   - `peak_min_ratio`：色相峰值最小占比阈值，用于过滤不明显的小峰。

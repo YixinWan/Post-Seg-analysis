@@ -26,6 +26,65 @@ class ColorAnalysisStep(PipelineStep):
         pixels = [tuple(px) for px in image[valid_mask]]
         return list(Counter(pixels).most_common(1)[0][0])
 
+    def _get_fill_mode(self):
+        mode = str(self.params.get('fill_mode', 'mode_color')).strip().lower()
+        aliases = {
+            'mode': 'mode_color',
+            'mode_color': 'mode_color',
+            'median_l': 'median_l',
+            'l_median': 'median_l',
+            'median_lightness': 'median_l',
+            'lab_l_median': 'median_l',
+        }
+        return aliases.get(mode, 'mode_color')
+
+    def _compute_median_l_color(self, image, mask):
+        valid_mask = mask & self._compute_non_black_mask(image)
+        channel_count = image.shape[2]
+        if not np.any(valid_mask):
+            return [0] * channel_count
+
+        bgr = image[:, :, :3]
+        lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+        l_channel = lab[:, :, 0].astype(np.float32)
+        l_values = l_channel[valid_mask]
+        if l_values.size == 0:
+            return [0] * channel_count
+
+        band_percentile = float(self.params.get('median_l_band_percentile', 0.2))
+        band_percentile = min(max(band_percentile, 0.01), 1.0)
+        lower_q = max(0.0, 0.5 - band_percentile / 2.0)
+        upper_q = min(1.0, 0.5 + band_percentile / 2.0)
+        lower = float(np.quantile(l_values, lower_q))
+        upper = float(np.quantile(l_values, upper_q))
+
+        middle_l_mask = valid_mask & (l_channel >= lower) & (l_channel <= upper)
+        if not np.any(middle_l_mask):
+            median_l = float(np.median(l_values))
+            abs_diff = np.abs(l_channel - median_l)
+            valid_indices = np.where(valid_mask)
+            nearest_idx = int(np.argmin(abs_diff[valid_mask]))
+            y, x = int(valid_indices[0][nearest_idx]), int(valid_indices[1][nearest_idx])
+            middle_l_mask = np.zeros_like(valid_mask, dtype=bool)
+            middle_l_mask[y, x] = True
+
+        selected_pixels = [tuple(px) for px in image[middle_l_mask]]
+        if not selected_pixels:
+            selected_pixels = [tuple(px) for px in image[valid_mask]]
+
+        fill_color = list(Counter(selected_pixels).most_common(1)[0][0])
+        if channel_count <= 3:
+            return fill_color[:channel_count]
+        if len(fill_color) < channel_count:
+            fill_color = fill_color + [255] * (channel_count - len(fill_color))
+        return fill_color
+
+    def _compute_fill_color(self, image, mask):
+        fill_mode = self._get_fill_mode()
+        if fill_mode == 'median_l':
+            return self._compute_median_l_color(image, mask)
+        return self._compute_mode_color(image, mask)
+
     def _circular_distance(self, hues, center):
         diff = np.abs(hues.astype(np.float32) - float(center))
         return np.minimum(diff, 180.0 - diff)
@@ -161,15 +220,18 @@ class ColorAnalysisStep(PipelineStep):
         saved_paths = []
         if len(regions) <= 1:
             for region in regions:
-                region['mode_color'] = self._compute_mode_color(mode_source_image, region['mask'])
+                fill_color = self._compute_fill_color(mode_source_image, region['mask'])
+                region['mode_color'] = fill_color
+                region['fill_color'] = fill_color
                 region['output_path'] = None
             return saved_paths
 
         for region in regions:
-            mode_color = self._compute_mode_color(mode_source_image, region['mask'])
+            fill_color = self._compute_fill_color(mode_source_image, region['mask'])
             separated = np.zeros_like(segmentation_image)
-            separated[region['mask']] = mode_color
-            region['mode_color'] = mode_color
+            separated[region['mask']] = fill_color
+            region['mode_color'] = fill_color
+            region['fill_color'] = fill_color
             region_output_path = self._build_region_output_path(base_output_path, region['index'])
             region['output_path'] = region_output_path
             if region_output_path:
@@ -197,18 +259,21 @@ class ColorAnalysisStep(PipelineStep):
 
         out_img = np.zeros_like(mode_source_image)
         for region in regions:
-            out_img[region['mask']] = region['mode_color']
+            out_img[region['mask']] = region['fill_color']
 
         if output_path:
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             cv2.imwrite(output_path, out_img)
 
+        fill_mode = self._get_fill_mode()
         self.params['last_hue_regions'] = [
             {
                 'index': region['index'],
                 'source_index': region.get('source_index', region['index']),
                 'center': region['center'],
                 'pixel_count': region['pixel_count'],
+                'fill_mode': fill_mode,
+                'fill_color': region['fill_color'],
                 'mode_color': region['mode_color'],
                 'output_path': region.get('output_path'),
             }
