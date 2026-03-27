@@ -29,8 +29,6 @@ postseg/
 configs/
   config.yaml            # pipeline参数配置
 outputs/                 # 推荐输出图片保存目录
-tests/
-  test_pipeline.py       # 测试用例
 requirements.txt         # pip依赖
 environment.yml          # conda环境配置
 ```
@@ -46,66 +44,52 @@ environment.yml          # conda环境配置
    pip install -r requirements.txt
    ```
 
-
 ## 使用方法
 
+### 修改并运行 pipeline（推荐流程）
 
-### 命令行直接指定图片：
-```sh
-python -m postseg.main <input_image> <config_path>
-# 示例：
-python -m postseg.main ./input.jpg ./configs/config.yaml
-```
+pipeline 的执行顺序由 `configs/config.yaml` 里 `pipeline:` 列表从上到下决定。
 
-### 如需额外保存最终 pipeline 结果：
-```sh
-python -m postseg.main <input_image> <output_image> <config_path>
-# 示例：
-python -m postseg.main ./input.jpg ./outputs/final_result.jpg ./configs/config.yaml
-```
+1. 打开 `configs/config.yaml`，按需调整步骤顺序（当前支持：`smooth`、`color`、`shadow`、`highlight`、`detail`）。
+2. 如需临时关闭某一步，直接删除对应 `- name: ...` 配置块即可。
+3. 在每一步的 `params` 里修改参数（例如 `fill_mode`、`shadow_percentile`、`highlight_percentile` 等）。
+4. 运行命令：
+  - 直接指定输入图 + 配置：`python -m postseg.main <input_image> <config_path>`
+  - 额外保存最终 pipeline 输出：`python -m postseg.main <input_image> <output_image> <config_path>`
+  - 弹框选图：`python -m postseg.main --gui <config_path>`
 
-### 运行时弹框选择图片：
-```sh
-python -m postseg.main --gui ./configs/config.yaml
-# 会弹出文件选择框选择本地图片
-```
+#### 常见修改示例
 
-> 建议将输出图片保存在 `outputs/` 目录下，便于管理。
-> 每次处理一张新图片前，程序会先清空 `outputs/` 目录中的旧结果，避免新旧图片输出混在一起。
-> 铺色分析总结果会输出到 `color.params.output_path` 指定路径。
-> 只有在检测到多个主色相时，才会额外生成 `*_hue_1.jpg`、`*_hue_2.jpg` ... 这样的单独图片；如果只有单一主色相，则只输出 1 张 `mode_color` 总图。
+- **只跑铺色，不跑暗部/亮部/细节**：在 `pipeline` 中仅保留 `smooth` 和 `color`。
+- **调整执行先后顺序**：直接调整 `pipeline` 列表中各 `- name:` 配置块的前后位置。
+- **新增自定义步骤**：在 `postseg/modules/` 下新增模块并继承 `PipelineStep`，再在 `postseg/main.py` 的 `STEP_MAP` 中注册，最后把步骤写入 `configs/config.yaml` 的 `pipeline` 列表。
 
-## 铺色分析的色相分割逻辑
+## 各模块逻辑简述
 
-铺色分析模块现在会先读取**平滑后的图片**，并按下面的方式决定是否需要先按色相拆分：
+- `smooth`（`postseg/modules/smooth.py`）
+  - 逻辑：对输入图像做高斯平滑，降低噪点，给后续色相/明暗分析提供更稳定的参考图。
+  - 输入：原始输入图像。
+  - 输出：平滑图（按 `output_path` 保存），并将平滑结果继续传给后续步骤。
 
-1. 转换到 HSV 色彩空间，仅统计非黑色像素的色相 $H$。
-2. 对 $H$ 的分布密度做平滑，寻找主要峰值，并将每个峰近似看作一个正态分布中心。
-3. 根据峰宽（标准差）和峰间距离，自动合并过近峰值、过滤过小峰值，得到主要色相。
-4. 分区边界始终基于**平滑后的图像**计算，以减少噪声干扰。
-5. 每个分区内部的铺色值使用的是**平滑前的原图**对应区域：
-  - `fill_mode=mode_color`：区域原图颜色众数（原逻辑）。
-  - `fill_mode=median_l`：先在区域内按 LAB 的 $L$ 选择“中间亮度带”像素，再用这批像素的原色众数铺色（不是中性灰）。
-6. 若只有一个主要色相，则直接对整块非黑区域执行所选 `fill_mode`。
-7. 若存在多个主要色相，则按最近主色相中心自动划分边界，先拆成多个色相区域，再分别执行所选铺色模式。
+- `color`（`postseg/modules/color_analysis.py`）
+  - 逻辑：在非黑区域做 HSV 色相统计，必要时按主色相分区，再按 `fill_mode`（`mode_color` 或 `median_l`）进行铺色。
+  - 输入：当前流程图像（通常为平滑图）+ 原始图（用于区域颜色统计）。
+  - 输出：铺色总图 `output_path`，多主色相时额外输出 `*_hue_N.*` 分区图。
 
-这样可以更稳定地区分颜色接近但色相不同的铺色区域，避免整图只被单一众数色覆盖。
+- `shadow`（`postseg/modules/shadow_analysis.py`）
+  - 逻辑：基于色块区域与亮度分位提取暗部，可选形态学后处理，再输出暗部 mode 色图和原色图。
+  - 输入：铺色结果（`color_output_path`）+ 分析参考图（通常为平滑图）+ 原始图。
+  - 输出：暗部总图 `output_path`，以及可选 `source_color_output_path`、`source_gray_overlay_output_path` 和分区暗部图。
 
-## 铺色分析输出说明
+- `highlight`（`postseg/modules/highlight_analysis.py`）
+  - 逻辑：与暗部模块对称，按亮度分位提取亮部，可选形态学后处理，再输出亮部 mode 色图和原色图。
+  - 输入：铺色结果（`color_output_path`）+ 分析参考图（通常为平滑图）+ 原始图。
+  - 输出：亮部总图 `output_path`，以及可选 `source_color_output_path`、`source_gray_overlay_output_path` 和分区亮部图。
 
-- 主输出：`output_path`
-  - 所有非黑区域都会被对应色相区域的 `mode_color` 覆盖。
-- 分区输出：`output_path` 同目录下的 `*_hue_N.*`
-  - **仅当检测到多个主色相时才会生成。**
-  - 每个文件只保留一个主色相区域。
-  - 该区域内部使用本区域的 `mode_color` 覆色。
-  - 其他区域全部置黑。
-
-## 输出目录清理规则
-
-- 每次处理新图片前，会先清空配置中 `output_path` 所在的 `outputs/` 目录。
-- 这样可以确保 `outputs/` 内只保留当前这一次分析对应的结果图。
-- 为了安全起见，只会自动清理目录名为 `outputs` 的输出目录。
+- `detail`（`postseg/modules/detail_analysis.py`）
+  - 逻辑：对当前图像执行细节增强/细节分析（具体算法以模块实现为准）。
+  - 输入：前一流程步骤输出图像。
+  - 输出：细节处理后的图像（作为 pipeline 最终结果或继续传递给后续步骤）。
 
 ## 配置与扩展
 - `configs/config.yaml` 控制pipeline流程和各模块参数。
@@ -142,8 +126,3 @@ python -m postseg.main --gui ./configs/config.yaml
     - `close_kernel`：闭运算核大小，用于连接近邻亮部空隙。
     - `dilate_kernel` / `dilate_iterations`：膨胀参数，用于扩展连通区域。
     - `erode_kernel` / `erode_iterations`：腐蚀参数，用于回收边缘、去掉过度膨胀。
-- 新增模块：在`modules/`下添加新模块，继承`PipelineStep`，并在`main.py`的`STEP_MAP`注册。
-- 可按需调整pipeline顺序和参数。
-
----
-如需进一步定制或扩展，请参考源码注释。

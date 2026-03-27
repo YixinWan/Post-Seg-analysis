@@ -1,4 +1,4 @@
-# pipeline参数配置示例
+# pipeline参数配置
 pipeline:
   - name: smooth
     params:
