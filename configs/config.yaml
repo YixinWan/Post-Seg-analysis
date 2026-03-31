@@ -12,38 +12,40 @@ pipeline:
       min_cluster_pixels: 50
       peak_min_ratio: 0.35
       hist_smooth_kernel: 9
-  # - name: shadow
-  #   params:
-  #     analysis_image_path: outputs/smoothed.jpg
-  #     color_output_path: outputs/mode_color.jpg
-  #     output_path: outputs/mode_color_shadow.jpg
-  #     source_color_output_path: outputs/mode_color_shadow_source.jpg
-  #     source_gray_overlay_output_path: outputs/mode_color_shadow_source_gray_overlay.jpg
-  #     shadow_percentile: 0.45
-  #     morphology:
-  #       enabled: true
-  #       open_kernel: 5
-  #       close_kernel: 5
-  #       dilate_kernel: 3
-  #       dilate_iterations: 3
-  #       erode_kernel: 5
-  #       erode_iterations: 3
-  # - name: highlight
-  #   params:
-  #     analysis_image_path: outputs/smoothed.jpg
-  #     color_output_path: outputs/mode_color.jpg
-  #     output_path: outputs/mode_color_highlight.jpg
-  #     source_color_output_path: outputs/mode_color_highlight_source.jpg
-  #     source_gray_overlay_output_path: outputs/mode_color_highlight_source_gray_overlay.jpg
-  #     highlight_percentile: 0.1
-  #     morphology:
-  #       enabled: true
-  #       open_kernel: 5
-  #       close_kernel: 5
-  #       dilate_kernel: 3
-  #       dilate_iterations: 3
-  #       erode_kernel: 5
-  #       erode_iterations: 3
+  - name: shadow
+    params:
+      analysis_image_path: outputs/smoothed.jpg
+      color_output_path: outputs/mode_color.jpg
+      output_path: outputs/mode_color_shadow.jpg
+      source_color_output_path: outputs/mode_color_shadow_source.jpg
+      source_gray_overlay_output_path: outputs/mode_color_shadow_source_gray_overlay.jpg
+      gray_overlay_alpha: 0.7
+      shadow_percentile: 0.5
+      morphology:
+        enabled: true
+        open_kernel: 5
+        close_kernel: 5
+        dilate_kernel: 1
+        dilate_iterations: 3
+        erode_kernel: 1
+        erode_iterations: 3
+  - name: highlight
+    params:
+      analysis_image_path: outputs/smoothed.jpg
+      color_output_path: outputs/mode_color.jpg
+      output_path: outputs/mode_color_highlight.jpg
+      source_color_output_path: outputs/mode_color_highlight_source.jpg
+      source_gray_overlay_output_path: outputs/mode_color_highlight_source_gray_overlay.jpg
+      gray_overlay_alpha: 0.7
+      highlight_percentile: 0.2
+      morphology:
+        enabled: false
+        open_kernel: 5
+        close_kernel: 5
+        dilate_kernel: 5
+        dilate_iterations: 3
+        erode_kernel: 5
+        erode_iterations: 3
   - name: detail
     params:
       analysis_image_path: outputs/smoothed.jpg
@@ -51,16 +53,17 @@ pipeline:
       output_path: outputs/mode_color_detail.jpg
       source_color_output_path: outputs/mode_color_detail_source.jpg
       source_gray_overlay_output_path: outputs/mode_color_detail_source_gray_overlay.jpg
+      gray_overlay_alpha: 0.7
       white_s_percentile: 0.15
       white_v_percentile: 0.5
-      detail_hue_delta: 8 #越小越严格（更容易判成“非主色相”）
-      detail_hue_min_saturation: 10 #越大越只看有颜色信息的像素
-      detail_hue_min_value: 5 #越大越忽略暗部噪点
+      detail_hue_delta: 2 #越小越严格（更容易判成“非主色相”）
+      detail_hue_min_saturation: 8 #越大越只看有颜色信息的像素
+      detail_hue_min_value: 2 #越大越忽略暗部噪点
       morphology:
-        enabled: true
-        open_kernel: 5
+        enabled: false
+        open_kernel: 3
         close_kernel: 3
-        dilate_kernel: 5
+        dilate_kernel: 3
         dilate_iterations: 1
-        erode_kernel: 13
+        erode_kernel: 3
         erode_iterations: 1

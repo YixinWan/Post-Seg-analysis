@@ -171,13 +171,16 @@ class ShadowAnalysisStep(PipelineStep):
         return str(region_path.with_name(f"{region_path.stem}_shadow_source_gray_overlay{suffix}"))
 
     def _build_gray_overlay_image(self, source_image, source_shadow_image):
-        gray = cv2.cvtColor(source_image[:, :, :3], cv2.COLOR_BGR2GRAY)
+        source_bgr = source_image[:, :, :3]
+        gray = cv2.cvtColor(source_bgr, cv2.COLOR_BGR2GRAY)
         gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-        overlay = gray_bgr.copy()
+        gray_alpha = float(self.params.get('gray_overlay_alpha', 1.0))
+        gray_alpha = min(max(gray_alpha, 0.0), 1.0)
+        overlay_layer = cv2.addWeighted(gray_bgr, gray_alpha, np.zeros_like(gray_bgr), 1.0 - gray_alpha, 0.0)
         mask = np.any(source_shadow_image > 0, axis=2)
         if np.any(mask):
-            overlay[mask] = source_shadow_image[mask]
-        return overlay
+            overlay_layer[mask] = source_shadow_image[mask]
+        return overlay_layer
 
     def _analyze_single_region(self, mask_image, working_image, source_image):
         region_mask = self._compute_non_black_mask(mask_image)
@@ -229,8 +232,7 @@ class ShadowAnalysisStep(PipelineStep):
         region_paths = self._discover_mask_paths(color_output_path)
         if not region_paths:
             empty = np.zeros_like(source_image)
-            gray = cv2.cvtColor(source_image[:, :, :3], cv2.COLOR_BGR2GRAY)
-            gray_bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            gray_bgr = self._build_gray_overlay_image(source_image, np.zeros_like(source_image))
             cv2.imwrite(str(base_output_path), empty)
             cv2.imwrite(str(source_color_output_path), empty)
             cv2.imwrite(str(gray_overlay_output_path), gray_bgr)
